@@ -1,0 +1,25 @@
+{
+  "name": "byteocol",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "left-pad": "^1.1.3"
+  },
+  "devDependencies": {
+    "tape": "^4.6.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KoryNunn/byteocol.git"
+  },
+  "bugs": {
+    "url": "https://github.com/KoryNunn/byteocol/issues"
+  },
+  "homepage": "https://github.com/KoryNunn/byteocol#readme",
+  "description": ""
+}
