@@ -1,10 +1,25 @@
 var leftPad = require('left-pad');
 
+var typeParsers = {
+    int: function(buffer){
+        var length = buffer.length,
+            index = 0;
+
+        return buffer.reduce(function(result, value){
+            result += value * Math.pow(256, length - 1 - index++);
+            return result;
+        }, 0);
+    },
+    string: function(buffer){
+        return buffer.toString();
+    }
+};
+
 function parseMessageFormat(messageFormat){
     var parts = messageFormat.split(' ');
 
     return parts.map(function(part){
-        var parts = part.match(/(\w)([0-9]*)\:(.*)/);
+        var parts = part.match(/(\w)([0-9]*)\:([^:]*)(?:\:(.*))?/);
 
         if(!parts){
             throw 'Bad protocol format: ' + messageFormat;
@@ -13,7 +28,8 @@ function parseMessageFormat(messageFormat){
         return {
             endien: parts[1],
             length: parseInt(parts[2]),
-            name: parts[3]
+            name: parts[3],
+            type: parts[4]
         };
     });
 }
@@ -23,6 +39,9 @@ function parseMessageFormats(messageFormats){
 
     for(var key in messageFormats){
         result[key] = parseMessageFormat(messageFormats[key]);
+        result[key].size = result[key].reduce(function(result, part){
+            return result + part.length;
+        }, 0)
     }
 
     return result;
@@ -33,7 +52,10 @@ function parse(type, buffer){
         result = {};
 
     definition.forEach(function(part){
-        result[part.name] = buffer.readUIntBE(0, part.length / 8);
+        result[part.name] = buffer.slice(0, part.length / 8);
+        if(part.type){
+            result[part.name] = typeParsers[part.type](result[part.name]);
+        }
         buffer = buffer.slice(part.length / 8, buffer.length);
     });
 
@@ -42,18 +64,35 @@ function parse(type, buffer){
 
 function serialize(type, data){
     var definition = this[type],
-        bits = definition.map(function(part){
-            return leftPad(data[part.name].toString(2), part.length, 0);
-        }).join('');
+        result = Buffer.alloc(definition.size / 8),
+        index = 0;
 
-    var bytes = [];
+    definition.forEach(function(part){
+        var dataValue = data[part.name],
+            partLength = part.length / 8,
+            partBuffer;
 
-    while(bits.length){
-        bytes.push(parseInt(bits.slice(0, 8), 2));
-        bits = bits.slice(8);
-    }
+        if(typeof dataValue === 'number'){
+            var bits = leftPad(dataValue.toString(2), part.length, 0).split('');
+            while(bits.length){
+                result[index] = parseInt(bits.splice(0, 8).join(''), 2);
+                index++;
+            }
+            return;
+        }else{
+            partBuffer = Buffer.from(dataValue);
+        }
 
-    result = new Buffer(bytes);
+        var startIndex = part.endien === 'b' ? index + Math.max(0, partLength - partBuffer.length) : index;
+
+        if(partBuffer.length > partLength){
+            throw 'Data exceeds available size';
+        }
+
+        partBuffer.copy(result, startIndex);
+
+        index += partLength;
+    });
 
     return result;
 }
@@ -66,3 +105,4 @@ module.exports = function(messageFormats){
         serialize: serialize.bind(messageParts)
     };
 };
+module.exports.typeParsers = typeParsers;
